@@ -1,0 +1,21 @@
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+coverage/
+# Sistem/IDE
+.DS_Store
+*.log
+# Test files with secrets
+tests/e2e/
+# Çevre dosyaları
+.env
+.env.*
+
+# Claude
+.claude/
+
+# Sentry
+.sentryclirc
+sentry-debug-*.json

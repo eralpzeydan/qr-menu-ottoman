@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { ADMIN VIEWER }
+enum Category { COLD HOT DESSERT }
+enum DietTag { VEGAN VEGETARIAN }
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(ADMIN)
+  createdAt    DateTime @default(now())
+}
+
+model Venue {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  announcement String?
+  openingHours Json?
+  products     Product[]
+  tables       Table[]
+  viewLogs     ViewLog[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Product {
+  id           String    @id @default(cuid())
+  venueId      String
+  venue        Venue     @relation(fields: [venueId], references: [id])
+  name         String
+  slug         String
+  category     Category
+  description  String?
+  priceCents   Int
+  imageUrl     String?
+  isActive     Boolean   @default(true)
+  isInStock    Boolean   @default(true)
+  dietTags     DietTag[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  priceHistory PriceHistory[]
+
+  @@unique([venueId, slug])
+}
+
+model PriceHistory {
+  id             String   @id @default(cuid())
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id])
+  oldPriceCents  Int
+  newPriceCents  Int
+  reason         String
+  changedAt      DateTime @default(now())
+}
+
+model Table {
+  id       String  @id @default(cuid())
+  venueId  String
+  venue    Venue   @relation(fields: [venueId], references: [id])
+  code     String
+  label    String?
+  qrlink   String?
+
+  @@unique([venueId, code])
+}
+
+model ViewLog {
+  id        String   @id @default(cuid())
+  venueId   String
+  venue     Venue    @relation(fields: [venueId], references: [id])
+  tableId   String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}

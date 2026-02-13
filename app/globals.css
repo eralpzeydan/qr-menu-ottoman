@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b;
+  --card:#ffffff; --chip:#f3f3f3; --border:#e6e6e6;
+  --accent:#7b4b2a; --accent-2:#d9b99b;
+  --success:#2e7d32; --warn:#c62828;
+  --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f0f0f; --fg:#f5f5f5; --muted:#b4b4b4;
+    --card:#1a1a1a; --chip:#222; --border:#2a2a2a;
+    --accent:#cfa07a; --accent-2:#5a3b27;
+  }
+}
+body {
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+}
+
+.bg-card{ background:var(--card); }
+.bg-chip{ background:var(--chip); }
+.text-muted{ color:var(--muted); }
+.border-base{ border-color:var(--border); }
+.bg-accent{ background:var(--accent); }
+.text-accent{ color:var(--accent); }
+.bg-accent-2{ background:var(--accent-2); }
+
+input,
+textarea,
+select {
+  background: var(--card);
+  color: var(--fg);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Admin dark theme */
+.admin-dark {
+  background: #0b1224;
+  color: #e2e8f0;
+}
+
+.admin-dark input,
+.admin-dark textarea,
+.admin-dark select {
+  background: #111827;
+  border-color: #1f2937;
+  color: #e2e8f0;
+}
+
+.admin-dark input::placeholder,
+.admin-dark textarea::placeholder {
+  color: #94a3b8;
+}
+
+.admin-dark table {
+  color: inherit;
+}
+
+.admin-dark thead {
+  background: #111827;
+}
+
+.admin-dark tbody tr {
+  border-color: #1f2937;
+}
+
+.admin-dark .card,
+.admin-dark .panel {
+  background: #0f172a;
+  border-color: #1f2937;
+}

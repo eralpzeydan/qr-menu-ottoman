@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADMIN")
+  createdAt    DateTime @default(now())
+}
+
+model Venue {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String     @unique
+  announcement String?
+  openingHours String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  categories   Category[]
+  products     Product[]
+  tables       Table[]
+  viewLogs     ViewLog[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  venueId   String
+  name      String
+  slug      String
+  imageUrl  String?
+  displayOrder Int    @default(0)
+  isVisible Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  venue     Venue     @relation(fields: [venueId], references: [id])
+  products  Product[]
+
+  @@unique([venueId, slug])
+  @@index([venueId, isVisible, displayOrder])
+}
+
+model Product {
+  id           String         @id @default(cuid())
+  venueId      String
+  name         String
+  slug         String
+  category     String?
+  categoryId   String?
+  description  String?
+  priceCents   Int
+  imageUrl     String?
+  isActive     Boolean        @default(true)
+  isInStock    Boolean        @default(true)
+  dietTags     String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+  priceHistory PriceHistory[]
+  categoryRel  Category?      @relation(fields: [categoryId], references: [id])
+  venue        Venue          @relation(fields: [venueId], references: [id])
+
+  @@unique([venueId, slug])
+  @@index([venueId, categoryId])
+}
+
+model PriceHistory {
+  id            String   @id @default(cuid())
+  productId     String
+  oldPriceCents Int
+  newPriceCents Int
+  reason        String
+  changedAt     DateTime @default(now())
+  product       Product  @relation(fields: [productId], references: [id])
+}
+
+model Table {
+  id      String  @id @default(cuid())
+  venueId String
+  code    String
+  label   String?
+  qrlink  String?
+  venue   Venue   @relation(fields: [venueId], references: [id])
+
+  @@unique([venueId, code])
+}
+
+model ViewLog {
+  id        String   @id @default(cuid())
+  venueId   String
+  tableId   String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  venue     Venue    @relation(fields: [venueId], references: [id])
+}
