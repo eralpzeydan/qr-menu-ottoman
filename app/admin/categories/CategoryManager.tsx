@@ -181,44 +181,17 @@ export default function CategoryManager({
       }
 
       setCategories((prev) => sortCategories([...prev, createdCategory]));
-      let updatedCategory = createdCategory;
 
       // Görsel varsa yükle
       if (file) {
-        setUploadingId(updatedCategory.id);
-        let prepared: File;
         try {
-          prepared = await prepareImageForUpload(file);
+          await uploadCategoryImage(createdCategory.id, file);
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Görsel işlenemedi';
-          setErr(msg);
-          setUploadingId(null);
+          setErr(`Kategori eklendi fakat görsel yüklenemedi: ${msg}`);
+          setSuccess('Kategori eklendi');
           return;
         }
-        const formData = new FormData();
-        formData.append('file', prepared);
-        const uploadRes = await fetch(`/api/categories/${createdCategory.id}/image`, {
-          method: 'POST',
-          headers: { 'x-csrf-token': getCsrf() },
-          credentials: 'include',
-          body: formData,
-        });
-        if (!uploadRes.ok) {
-          const d = (await uploadRes.json().catch(() => ({}))) as { error?: unknown };
-          const msg = typeof d.error === 'string' ? d.error : 'Görsel yüklenemedi';
-          setErr(msg);
-        } else {
-          const body = (await uploadRes.json().catch(() => ({}))) as { url?: string };
-          if (body.url) {
-            updatedCategory = { ...updatedCategory, imageUrl: body.url };
-            setCategories((prev) =>
-              sortCategories(
-                prev.map((c) => (c.id === updatedCategory.id ? updatedCategory : c))
-              )
-            );
-          }
-        }
-        setUploadingId(null);
       }
 
       setForm((prev) => ({
@@ -267,6 +240,58 @@ export default function CategoryManager({
       setErr(msg);
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function uploadCategoryImage(categoryId: string, inputFile: File) {
+    setUploadingId(categoryId);
+    try {
+      let prepared: File;
+      try {
+        prepared = await prepareImageForUpload(inputFile);
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : 'Görsel işlenemedi');
+      }
+
+      const formData = new FormData();
+      formData.append('file', prepared);
+
+      const uploadRes = await fetch(`/api/categories/${categoryId}/image`, {
+        method: 'POST',
+        headers: { 'x-csrf-token': getCsrf() },
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const d = (await uploadRes.json().catch(() => ({}))) as { error?: unknown };
+        const msg = typeof d.error === 'string' ? d.error : 'Görsel yüklenemedi';
+        throw new Error(msg);
+      }
+
+      const body = (await uploadRes.json().catch(() => ({}))) as { url?: string };
+      if (!body.url) {
+        throw new Error('Görsel URL bilgisi alınamadı');
+      }
+
+      setCategories((prev) =>
+        sortCategories(prev.map((c) => (c.id === categoryId ? { ...c, imageUrl: body.url } : c)))
+      );
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
+  async function handleExistingCategoryImageUpload(categoryId: string, inputFile: File) {
+    setErr(null);
+    setSuccess(null);
+    try {
+      await ensureCsrf();
+      await uploadCategoryImage(categoryId, inputFile);
+      setSuccess('Kategori görseli güncellendi');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Görsel yüklenemedi';
+      setErr(msg);
     }
   }
 
@@ -606,10 +631,24 @@ export default function CategoryManager({
                     <span className={cat.isVisible ? 'text-green-700' : 'text-gray-500'}>
                       {cat.isVisible ? 'Görünür' : 'Gizli'}
                     </span>
+                    <label className="mt-1 rounded border px-2 py-1 text-[11px] hover:bg-gray-50 cursor-pointer border-gray-300">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const chosen = e.target.files?.[0];
+                          e.currentTarget.value = '';
+                          if (!chosen) return;
+                          void handleExistingCategoryImageUpload(cat.id, chosen);
+                        }}
+                      />
+                      {uploadingId === cat.id ? 'Yükleniyor…' : cat.imageUrl ? 'Görseli Değiştir' : 'Görsel Ekle'}
+                    </label>
                     <button
                       type="button"
                       onClick={() => handleDelete(cat.id)}
-                      disabled={deletingId === cat.id}
+                      disabled={deletingId === cat.id || uploadingId === cat.id}
                       className="mt-1 rounded border px-2 py-1 text-[11px] hover:bg-red-50 text-red-700 border-red-200 disabled:opacity-60"
                     >
                       {deletingId === cat.id ? 'Siliniyor…' : 'Sil'}
