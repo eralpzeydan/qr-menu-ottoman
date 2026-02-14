@@ -93,6 +93,19 @@ const normalizeProductCategory = (category?: string | null) => {
   return lower.replace(/\s+/g, '-');
 };
 
+const resolveImageSrc = (url?: string | null) => {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith('.r2.dev')) {
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  } catch {
+    return url;
+  }
+};
+
 export default function MenuClient({
   venue,
   products,
@@ -283,8 +296,8 @@ export default function MenuClient({
 
     categories.forEach((c) => {
       if (c.id) idToSlug[c.id] = c.slug;
-      if (c.slug && !slugToImage[c.slug] && c.imageUrl) {
-        slugToImage[c.slug] = c.imageUrl;
+      if (c.slug && !slugToImage[c.slug]) {
+        slugToImage[c.slug] = c.imageUrl || `/images/categories/${c.slug}.jpg`;
       }
     });
     subCategories.forEach((s) => {
@@ -589,7 +602,7 @@ export default function MenuClient({
               >
                 {categoryMaps.slugToImage[cat.slug] ? (
                   <Image
-                    src={categoryMaps.slugToImage[cat.slug]!}
+                    src={resolveImageSrc(categoryMaps.slugToImage[cat.slug]) || categoryMaps.slugToImage[cat.slug]!}
                     alt={cat.name}
                     width={96}
                     height={80}
@@ -622,7 +635,7 @@ export default function MenuClient({
           >
             {categoryMaps.slugToImage[selectedCat] ? (
               <Image
-                src={categoryMaps.slugToImage[selectedCat]!}
+                src={resolveImageSrc(categoryMaps.slugToImage[selectedCat]) || categoryMaps.slugToImage[selectedCat]!}
                 alt={categories.find((c) => c.slug === selectedCat)?.name || selectedCat}
                 fill
                 className="object-cover"
@@ -710,20 +723,18 @@ export default function MenuClient({
                         onClick={() => setSheetProduct(p)}
                         className="flex items-center w-full text-left"
                       >
-                        <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                          {p.imageUrl ? (
+                        {p.imageUrl ? (
+                          <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                             <Image
-                              src={p.imageUrl}
+                              src={resolveImageSrc(p.imageUrl) || p.imageUrl}
                               alt={p.name}
                               fill
                               className="object-cover"
                               unoptimized
                             />
-                          ) : (
-                            <div className="w-full h-full bg-[#cfcaca]" />
-                          )}
-                        </div>
-                        <div className="flex flex-col flex-1 ml-3">
+                          </div>
+                        ) : null}
+                        <div className={`flex flex-col flex-1 ${p.imageUrl ? "ml-3" : ""}`}>
                           <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
                             {p.name}
                           </h2>
@@ -753,20 +764,18 @@ export default function MenuClient({
                     onClick={() => setSheetProduct(p)}
                     className="flex items-center w-full text-left"
                   >
-                    <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                      {p.imageUrl ? (
+                    {p.imageUrl ? (
+                      <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                         <Image
-                          src={p.imageUrl}
+                          src={resolveImageSrc(p.imageUrl) || p.imageUrl}
                           alt={p.name}
                           fill
                           className="object-cover"
                           unoptimized
                         />
-                      ) : (
-                        <div className="w-full h-full bg-[#cfcaca]" />
-                      )}
-                    </div>
-                    <div className="flex flex-col flex-1 ml-3">
+                      </div>
+                    ) : null}
+                    <div className={`flex flex-col flex-1 ${p.imageUrl ? "ml-3" : ""}`}>
                       <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
                         {p.name}
                       </h2>
@@ -813,7 +822,7 @@ export default function MenuClient({
               <div className="relative h-52 w-full">
                 {sheetProduct.imageUrl ? (
                   <Image
-                    src={sheetProduct.imageUrl}
+                    src={resolveImageSrc(sheetProduct.imageUrl) || sheetProduct.imageUrl}
                     alt={sheetProduct.name}
                     fill
                     className="object-cover"
@@ -978,7 +987,7 @@ export default function MenuClient({
                         <div className="relative h-14 w-14 overflow-hidden rounded-xl">
                           {entry.product.imageUrl ? (
                             <Image
-                              src={entry.product.imageUrl}
+                              src={resolveImageSrc(entry.product.imageUrl) || entry.product.imageUrl}
                               alt={entry.product.name}
                               fill
                               className="object-cover"
