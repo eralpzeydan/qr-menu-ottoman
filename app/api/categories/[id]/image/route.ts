@@ -2,8 +2,8 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ensureAdmin, ensureRequestCsrf } from '@/lib/api/guards';
-import { isSupabaseStorageEnabled, supabaseAdapter } from '@/lib/storage/supabase';
-import { localAdapter } from '@/lib/storage/local';
+import type { StorageAdapter } from '@/lib/storage';
+import { getStorageAdapter } from '@/lib/storage/provider';
 
 const MAX = 2 * 1024 * 1024;
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
@@ -37,14 +37,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Geçersiz MIME' }, { status: 400 });
   }
 
-  const adapter = isSupabaseStorageEnabled() ? supabaseAdapter : localAdapter;
+  let adapter: StorageAdapter;
+  try {
+    adapter = getStorageAdapter();
+  } catch (err) {
+    console.error('CATEGORY_IMAGE_STORAGE_CONFIG_ERROR', err);
+    return NextResponse.json({ error: 'Storage ayari eksik veya gecersiz' }, { status: 500 });
+  }
 
   let stored: { url: string; remove?: () => Promise<void> } | null = null;
   try {
     stored = await adapter.save(file, { folder: 'category-images' });
   } catch (err) {
     console.error('CATEGORY_IMAGE_SAVE_ERROR', err);
-    return NextResponse.json({ error: 'Fotoğraf yüklenemedi' }, { status: 500 });
+    const message =
+      process.env.NODE_ENV === 'development' && err instanceof Error
+        ? `Fotoğraf yüklenemedi: ${err.message}`
+        : 'Fotoğraf yüklenemedi';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   try {

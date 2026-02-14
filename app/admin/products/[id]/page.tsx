@@ -15,7 +15,9 @@ export default async function EditProductPage({ params }: { params: { id: string
       name: true,
       category: true,
       categoryId: true,
+      subCategoryId: true,
       priceCents: true,
+      imageUrl: true,
       description: true,
       isActive: true,
       isInStock: true,
@@ -24,17 +26,24 @@ export default async function EditProductPage({ params }: { params: { id: string
   });
   if (!product) notFound();
 
-  const categories = await prisma.category.findMany({
-    where: { venueId: product.venueId },
-    orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-    select: { id: true, name: true, slug: true },
-  });
+  const [categories, subCategories] = await Promise.all([
+    prisma.category.findMany({
+      where: { venueId: product.venueId },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, slug: true },
+    }),
+    prisma.subCategory.findMany({
+      where: { venueId: product.venueId },
+      orderBy: [{ categoryId: 'asc' }, { displayOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, slug: true, categoryId: true },
+    }),
+  ]);
 
   return (
     <AuthGate>
       <main className="max-w-screen-sm mx-auto p-6 space-y-4">
         <h1 className="text-2xl font-semibold">Ürün Düzenle</h1>
-        <EditProductForm product={product} categories={categories} />
+        <EditProductForm product={product} categories={categories} subCategories={subCategories} />
       </main>
     </AuthGate>
   );

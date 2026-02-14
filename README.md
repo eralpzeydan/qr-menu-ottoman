@@ -19,3 +19,5 @@ pnpm dev
 - Service Worker `public/sw.js` ile temel offline cache (read-only)
 - Prisma provider: `.env` ile `sqlite` (dev) veya `postgresql` (prod)
 - `SESSION_SECRET` en az 32 karakter olmalı; üretmek için `openssl rand -hex 32` kullanabilirsiniz.
+- Storage provider secimi: `STORAGE_PROVIDER=auto|r2|supabase|local`
+  - `auto`: once R2, sonra Supabase, yoksa local fallback

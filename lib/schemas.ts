@@ -14,6 +14,7 @@ export const productCreateSchema = z.object({
   slug: z.string().min(1).optional(),
   category: categoryValue.optional(),
   categoryId: z.string().trim().min(1).optional(),
+  subCategoryId: z.string().trim().min(1).optional(),
   description: z.string().optional(),
   priceCents: z.number().int().min(0),
   isActive: z.boolean().optional(),
@@ -29,6 +30,7 @@ export const productPatchSchema = z.object({
   slug: z.string().optional(),
   category: categoryValue.optional(),
   categoryId: z.string().trim().min(1).optional(),
+  subCategoryId: z.string().trim().min(1).nullable().optional(),
   description: z.string().nullable().optional(),
   priceCents: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
@@ -45,6 +47,14 @@ export const categoryCreateSchema = z.object({
   venueId: z.string().trim().min(1, 'Mekan zorunlu'),
   name: z.string().trim().min(1, 'İsim zorunlu').max(100),
   imageUrl: z.string().trim().min(1).max(512).optional(),
+  displayOrder: z.number().int().min(0).optional(),
+  isVisible: z.boolean().optional(),
+});
+
+export const subCategoryCreateSchema = z.object({
+  venueId: z.string().trim().min(1, 'Mekan zorunlu'),
+  categoryId: z.string().trim().min(1, 'Kategori zorunlu'),
+  name: z.string().trim().min(1, 'İsim zorunlu').max(100),
   displayOrder: z.number().int().min(0).optional(),
   isVisible: z.boolean().optional(),
 });

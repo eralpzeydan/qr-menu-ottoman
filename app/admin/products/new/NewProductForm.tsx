@@ -17,9 +17,11 @@ const inputIds = {
 
 type VenueOption = { id: string; name: string; slug: string };
 type CategoryOption = { id: string; name: string; slug: string; venueId: string };
+type SubCategoryOption = { id: string; name: string; slug: string; venueId: string; categoryId: string };
 type FormState = {
   venueId: string;
   categoryId: string;
+  subCategoryId: string;
   name: string;
   priceInput: string;
   description: string;
@@ -27,13 +29,22 @@ type FormState = {
   isInStock: boolean;
 };
 
-export default function NewProductForm({ venues, categories }: { venues: VenueOption[]; categories: CategoryOption[] }) {
+export default function NewProductForm({
+  venues,
+  categories,
+  subCategories,
+}: {
+  venues: VenueOption[];
+  categories: CategoryOption[];
+  subCategories: SubCategoryOption[];
+}) {
   const router = useRouter();
   const initialVenueId = venues[0]?.id ?? '';
   const initialCategory = categories.find((c) => c.venueId === initialVenueId);
   const [state, setState] = useState<FormState>({
     venueId: initialVenueId,
     categoryId: initialCategory?.id ?? '',
+    subCategoryId: '',
     name: '',
     priceInput: '',
     description: '',
@@ -51,18 +62,36 @@ export default function NewProductForm({ venues, categories }: { venues: VenueOp
     () => categories.filter((c) => c.venueId === state.venueId),
     [categories, state.venueId]
   );
+  const subCategoriesForSelection = useMemo(
+    () =>
+      subCategories.filter(
+        (s) => s.venueId === state.venueId && s.categoryId === state.categoryId
+      ),
+    [state.categoryId, state.venueId, subCategories]
+  );
 
   useEffect(() => {
     if (!categoriesForVenue.length) {
-      setState((prev) => ({ ...prev, categoryId: '' }));
+      setState((prev) => ({ ...prev, categoryId: '', subCategoryId: '' }));
       return;
     }
     const exists = categoriesForVenue.some((c) => c.id === state.categoryId);
     if (!exists) {
       const fallback = categoriesForVenue[0];
-      setState((prev) => ({ ...prev, categoryId: fallback.id }));
+      setState((prev) => ({ ...prev, categoryId: fallback.id, subCategoryId: '' }));
     }
   }, [categoriesForVenue, state.categoryId]);
+
+  useEffect(() => {
+    if (!subCategoriesForSelection.length) {
+      if (state.subCategoryId) setState((prev) => ({ ...prev, subCategoryId: '' }));
+      return;
+    }
+    const exists = subCategoriesForSelection.some((s) => s.id === state.subCategoryId);
+    if (!exists) {
+      setState((prev) => ({ ...prev, subCategoryId: subCategoriesForSelection[0].id }));
+    }
+  }, [state.subCategoryId, subCategoriesForSelection]);
 
   useEffect(() => {
     if (!img) {
@@ -108,6 +137,7 @@ async function submit(e: React.FormEvent) {
       venueId: state.venueId,
       name: state.name,
       categoryId: selectedCategory.id,
+      subCategoryId: state.subCategoryId || undefined,
       category: selectedCategory.slug || selectedCategory.name,
       priceCents,
       description: state.description,
@@ -242,7 +272,11 @@ async function submit(e: React.FormEvent) {
                 onChange={(e) => {
                   const nextId = e.target.value;
                   const next = categories.find((c) => c.id === nextId);
-                  setState((prev) => ({ ...prev, categoryId: next ? next.id : nextId }));
+                  setState((prev) => ({
+                    ...prev,
+                    categoryId: next ? next.id : nextId,
+                    subCategoryId: '',
+                  }));
                 }}
               >
                 {categoriesForVenue.map((cat) => (
@@ -253,6 +287,25 @@ async function submit(e: React.FormEvent) {
               <div className="px-3 py-2 border rounded text-sm text-gray-500 bg-gray-50">
                 Bu mekan için kategori tanımlı değil.{' '}
                 <a className="underline" href="/admin/categories">Kategori ekleyin.</a>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm" htmlFor="new-product-subcategory">Alt Kategori</label>
+            {subCategoriesForSelection.length > 0 ? (
+              <select
+                id="new-product-subcategory"
+                className="w-full border rounded px-3 py-2"
+                value={state.subCategoryId}
+                onChange={(e) => setState((prev) => ({ ...prev, subCategoryId: e.target.value }))}
+              >
+                {subCategoriesForSelection.map((sub) => (
+                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="px-3 py-2 border rounded text-sm text-gray-500 bg-gray-50">
+                Bu kategori için alt kategori tanımlı değil.
               </div>
             )}
           </div>

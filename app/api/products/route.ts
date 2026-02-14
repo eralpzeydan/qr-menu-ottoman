@@ -7,6 +7,7 @@ import { productCreateSchema } from '@/lib/schemas';
 import { ensureAdmin, ensureCsrf, ensureRequestCsrf } from '@/lib/api/guards';
 import { toProductSlug } from '@/lib/products/slug';
 import { resolveCategorySelection } from '@/lib/products/category';
+import { resolveSubCategorySelection } from '@/lib/products/subcategory';
 
 export async function GET(req: NextRequest) {
   const authError = await ensureAdmin(req);
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   const items = await prisma.product.findMany({
     where, orderBy: { createdAt: 'desc' },
-    select: { id:true, name:true, slug:true, category:true, description:true, priceCents:true, imageUrl:true, isInStock:true, isActive:true, venueId:true }
+    select: { id:true, name:true, slug:true, category:true, categoryId: true, subCategoryId: true, description:true, priceCents:true, imageUrl:true, isInStock:true, isActive:true, venueId:true }
   });
 
   const res = NextResponse.json({ items });
@@ -88,6 +89,25 @@ export async function POST(req: NextRequest) {
   }
   venueId = venue.id;
 
+  let subCategoryId: string | null = null;
+  if (data.subCategoryId && !categorySelection.categoryId) {
+    return NextResponse.json({ error: 'Alt kategori seçimi için geçerli kategori zorunlu' }, { status: 400 });
+  }
+  try {
+    subCategoryId = await resolveSubCategorySelection({
+      subCategoryId: data.subCategoryId,
+      categoryId: categorySelection.categoryId,
+      venueId,
+    });
+  } catch (err) {
+    const status =
+      typeof err === 'object' && err !== null && 'status' in err && typeof (err as { status?: number }).status === 'number'
+        ? (err as { status: number }).status
+        : 400;
+    const message = err instanceof Error ? err.message : 'Alt kategori seçilemedi';
+    return NextResponse.json({ error: message }, { status });
+  }
+
   // slug üret
   const baseSlugRaw = data.slug || data.name || '';
   const normalizedSlug = toProductSlug(baseSlugRaw);
@@ -102,6 +122,7 @@ export async function POST(req: NextRequest) {
         slug,
         category: categorySelection.categoryValue,
         categoryId: categorySelection.categoryId,
+        subCategoryId,
         description: data.description ?? null,
         priceCents: data.priceCents,
         isActive: data.isActive ?? true,
@@ -127,6 +148,7 @@ export async function POST(req: NextRequest) {
               slug: `${slug}-${i}`,
               category: categorySelection.categoryValue,
               categoryId: categorySelection.categoryId,
+              subCategoryId,
               description: data.description ?? null,
               priceCents: data.priceCents,
               isActive: data.isActive ?? true,

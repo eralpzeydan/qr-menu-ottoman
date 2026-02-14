@@ -7,7 +7,7 @@ export const metadata = { title: 'Admin • Kategoriler' };
 
 export default async function CategoriesPage() {
   await requireAdminOnServer();
-  const [venues, categories] = await Promise.all([
+  const [venues, categories, subCategories] = await Promise.all([
     prisma.venue.findMany({
       orderBy: { name: 'asc' },
       select: { id: true, name: true, slug: true },
@@ -24,6 +24,18 @@ export default async function CategoriesPage() {
         isVisible: true,
       },
     }),
+    prisma.subCategory.findMany({
+      orderBy: [{ venueId: 'asc' }, { categoryId: 'asc' }, { displayOrder: 'asc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        venueId: true,
+        categoryId: true,
+        name: true,
+        slug: true,
+        displayOrder: true,
+        isVisible: true,
+      },
+    }),
   ]);
 
   return (
@@ -33,7 +45,7 @@ export default async function CategoriesPage() {
           <h1 className="text-2xl font-semibold">Kategoriler</h1>
           <a className="underline text-sm" href="/admin/products">Ürünler</a>
         </div>
-        <CategoryManager venues={venues} initialCategories={categories} />
+        <CategoryManager venues={venues} initialCategories={categories} initialSubCategories={subCategories} />
       </main>
     </AuthGate>
   );

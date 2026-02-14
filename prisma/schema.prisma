@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -24,6 +25,7 @@ model Venue {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   categories   Category[]
+  subCategories SubCategory[]
   products     Product[]
   tables       Table[]
   viewLogs     ViewLog[]
@@ -41,6 +43,7 @@ model Category {
   updatedAt DateTime  @updatedAt
   venue     Venue     @relation(fields: [venueId], references: [id])
   products  Product[]
+  subCategories SubCategory[]
 
   @@unique([venueId, slug])
   @@index([venueId, isVisible, displayOrder])
@@ -53,6 +56,7 @@ model Product {
   slug         String
   category     String?
   categoryId   String?
+  subCategoryId String?
   description  String?
   priceCents   Int
   imageUrl     String?
@@ -64,10 +68,30 @@ model Product {
   deletedAt    DateTime?
   priceHistory PriceHistory[]
   categoryRel  Category?      @relation(fields: [categoryId], references: [id])
+  subCategoryRel SubCategory? @relation(fields: [subCategoryId], references: [id])
   venue        Venue          @relation(fields: [venueId], references: [id])
 
   @@unique([venueId, slug])
   @@index([venueId, categoryId])
+  @@index([venueId, subCategoryId])
+}
+
+model SubCategory {
+  id           String    @id @default(cuid())
+  venueId      String
+  categoryId   String
+  name         String
+  slug         String
+  displayOrder Int       @default(0)
+  isVisible    Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  venue        Venue     @relation(fields: [venueId], references: [id])
+  category     Category  @relation(fields: [categoryId], references: [id])
+  products     Product[]
+
+  @@unique([venueId, categoryId, slug])
+  @@index([venueId, categoryId, isVisible, displayOrder])
 }
 
 model PriceHistory {

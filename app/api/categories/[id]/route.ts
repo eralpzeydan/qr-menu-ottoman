@@ -21,6 +21,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (productCount > 0) {
     return NextResponse.json({ error: 'Bu kategoriye bağlı ürünler var, silinemez' }, { status: 400 });
   }
+  const subCategoryCount = await prisma.subCategory.count({ where: { categoryId: params.id } });
+  if (subCategoryCount > 0) {
+    return NextResponse.json({ error: 'Bu kategoriye bağlı alt kategoriler var, silinemez' }, { status: 400 });
+  }
 
   try {
     await prisma.category.delete({ where: { id: params.id } });

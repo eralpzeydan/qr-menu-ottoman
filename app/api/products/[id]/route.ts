@@ -6,6 +6,7 @@ import { productPatchSchema } from '@/lib/schemas';
 import { toProductSlug } from '@/lib/products/slug';
 import { ensureAdmin, ensureCsrf } from '@/lib/api/guards';
 import { resolveCategorySelection } from '@/lib/products/category';
+import { resolveSubCategorySelection } from '@/lib/products/subcategory';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string }}) {
   const authError = await ensureAdmin(req);
@@ -22,6 +23,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
+  const existing = await prisma.product.findUnique({
+    where: { id: params.id },
+    select: { id: true, venueId: true, categoryId: true, subCategoryId: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: 'Ürün bulunamadı' }, { status: 404 });
+  }
 
   const updateData: Prisma.ProductUncheckedUpdateInput = {};
   if (d.name) updateData.name = d.name;
@@ -32,11 +40,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
     updateData.slug = normalized;
   }
+  let nextCategoryId: string | null = existing.categoryId ?? null;
   if (d.category !== undefined || d.categoryId) {
     try {
       const selection = await resolveCategorySelection({ categoryId: d.categoryId, category: d.category });
       updateData.category = selection.categoryValue;
       updateData.categoryId = selection.categoryId;
+      nextCategoryId = selection.categoryId;
+      if (d.subCategoryId === undefined) {
+        updateData.subCategoryId = null;
+      }
     } catch (err) {
       const status =
         typeof err === 'object' && err !== null && 'status' in err && typeof (err as { status?: number }).status === 'number'
@@ -49,6 +62,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           ? (err as { message?: string }).message
           : 'Kategori güncellenemedi';
       return NextResponse.json({ error: message }, { status });
+    }
+  }
+  if (d.subCategoryId !== undefined) {
+    if (d.subCategoryId === null) {
+      updateData.subCategoryId = null;
+    } else {
+      if (!nextCategoryId) {
+        return NextResponse.json({ error: 'Alt kategori için geçerli kategori zorunlu' }, { status: 400 });
+      }
+      try {
+        const resolvedSubCategoryId = await resolveSubCategorySelection({
+          subCategoryId: d.subCategoryId,
+          categoryId: nextCategoryId,
+          venueId: existing.venueId,
+        });
+        updateData.subCategoryId = resolvedSubCategoryId;
+      } catch (err) {
+        const status =
+          typeof err === 'object' && err !== null && 'status' in err && typeof (err as { status?: number }).status === 'number'
+            ? (err as { status: number }).status
+            : 400;
+        const message = err instanceof Error ? err.message : 'Alt kategori güncellenemedi';
+        return NextResponse.json({ error: message }, { status });
+      }
     }
   }
   if (d.description !== undefined) updateData.description = d.description ?? null;
@@ -69,9 +106,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (code === 'P2002') {
       return NextResponse.json({ error: 'Bu slug zaten kullanımda' }, { status: 409 });
     }
-    if (code === 'P2025') {
-      return NextResponse.json({ error: 'Ürün bulunamadı' }, { status: 404 });
-    }
+    if (code === 'P2025') return NextResponse.json({ error: 'Ürün bulunamadı' }, { status: 404 });
     console.error('PRODUCT_PATCH_ERROR', err);
     return NextResponse.json({ error: 'Beklenmeyen hata' }, { status: 500 });
   }

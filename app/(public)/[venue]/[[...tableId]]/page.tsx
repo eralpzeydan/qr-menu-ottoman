@@ -30,8 +30,21 @@ async function fetchMenu(venue: string, tableId?: string) {
     clearTimeout(timeoutId);
 
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({ error: 'Bilinmeyen hata' }));
-      throw new Error(errorData.error || `Menü alınamadı (${res.status})`);
+      const raw = await res.text().catch(() => '');
+      let message = `Menü alınamadı (${res.status})`;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { error?: unknown };
+          if (typeof parsed.error === 'string' && parsed.error.trim()) {
+            message = parsed.error;
+          } else {
+            message = `${message}: ${raw.slice(0, 180)}`;
+          }
+        } catch {
+          message = `${message}: ${raw.slice(0, 180)}`;
+        }
+      }
+      throw new Error(message);
     }
 
     return res.json();
@@ -49,7 +62,7 @@ async function fetchMenu(venue: string, tableId?: string) {
 export default async function Page({ params }: { params: Params }) {
   const { venue } = params;
   const tableId = params.tableId?.[0];
-  const { venue: venueData, products, categories } = await fetchMenu(venue, tableId);
+  const { venue: venueData, products, categories, subCategories } = await fetchMenu(venue, tableId);
 
-  return <MenuClient venue={venueData} products={products} categories={categories} />;
+  return <MenuClient venue={venueData} products={products} categories={categories} subCategories={subCategories} />;
 }

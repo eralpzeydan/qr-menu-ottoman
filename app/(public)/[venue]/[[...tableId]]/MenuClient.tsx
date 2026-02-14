@@ -24,8 +24,6 @@ const paperBg =
 
 /** =============================================== */
 
-const ALL_CATEGORY_IMAGE = "/images/categories/all.jpg";
-
 type Product = {
   id: string;
   name: string;
@@ -36,6 +34,7 @@ type Product = {
   dietTags?: string[];
   category?: string;
   categoryId?: string | null;
+  subCategoryId?: string | null;
 };
 
 type Category = {
@@ -43,6 +42,15 @@ type Category = {
   slug: string;
   name: string;
   imageUrl?: string;
+  displayOrder?: number;
+};
+
+type SubCategory = {
+  id: string;
+  venueId: string;
+  categoryId: string;
+  slug: string;
+  name: string;
   displayOrder?: number;
 };
 
@@ -89,15 +97,18 @@ export default function MenuClient({
   venue,
   products,
   categories,
+  subCategories = [],
 }: {
   venue: Venue;
   products: Product[];
   categories: Category[];
+  subCategories?: SubCategory[];
 }) {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedCat, setSelectedCat] = useState<string>("ALL");
+  const [selectedCat, setSelectedCat] = useState<string>(categories[0]?.slug ?? "");
+  const [selectedSubCat, setSelectedSubCat] = useState<string>("ALL");
   const [sheetProduct, setSheetProduct] = useState<Product | null>(null);
   const [sheetReady, setSheetReady] = useState(false);
   const [sheetQuantity, setSheetQuantity] = useState(0);
@@ -159,12 +170,31 @@ export default function MenuClient({
   }, [sheetProduct]);
 
   useEffect(() => {
-    if (selectedCat === "ALL") return;
+    if (!selectedCat) return;
     const exists = categories.some((c) => c.slug === selectedCat);
     if (!exists) {
-      setSelectedCat("ALL");
+      setSelectedCat(categories[0]?.slug ?? "");
     }
   }, [categories, selectedCat]);
+
+  useEffect(() => {
+    if (!selectedCat) return;
+    const selectedCategory = categories.find((c) => c.slug === selectedCat);
+    if (!selectedCategory) {
+      setSelectedSubCat("ALL");
+      return;
+    }
+    const allowed = subCategories
+      .filter((s) => s.categoryId === selectedCategory.id)
+      .map((s) => s.slug);
+    if (allowed.length === 0) {
+      if (selectedSubCat !== "ALL") setSelectedSubCat("ALL");
+      return;
+    }
+    if (selectedSubCat !== "ALL" && !allowed.includes(selectedSubCat)) {
+      setSelectedSubCat("ALL");
+    }
+  }, [categories, selectedCat, selectedSubCat, subCategories]);
 
   useEffect(() => {
     if (sheetAnimationFrame.current !== null) {
@@ -247,11 +277,33 @@ export default function MenuClient({
   const categoryMaps = useMemo(() => {
     const idToSlug: Record<string, string> = {};
     const slugToImage: Record<string, string | undefined> = {};
+    const subIdToSlug: Record<string, string> = {};
+    const subSlugToName: Record<string, string> = {};
+    const categorySlugToSubCategories: Record<string, SubCategory[]> = {};
+
     categories.forEach((c) => {
       if (c.id) idToSlug[c.id] = c.slug;
       if (c.slug && !slugToImage[c.slug] && c.imageUrl) {
         slugToImage[c.slug] = c.imageUrl;
       }
+    });
+    subCategories.forEach((s) => {
+      if (s.id) subIdToSlug[s.id] = s.slug;
+      if (s.slug) subSlugToName[s.slug] = s.name;
+      const categorySlug = idToSlug[s.categoryId];
+      if (!categorySlug) return;
+      if (!categorySlugToSubCategories[categorySlug]) {
+        categorySlugToSubCategories[categorySlug] = [];
+      }
+      categorySlugToSubCategories[categorySlug].push(s);
+    });
+    Object.keys(categorySlugToSubCategories).forEach((key) => {
+      categorySlugToSubCategories[key] = [...categorySlugToSubCategories[key]].sort((a, b) => {
+        const aOrder = a.displayOrder ?? 0;
+        const bOrder = b.displayOrder ?? 0;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.name.localeCompare(b.name);
+      });
     });
     products.forEach((p) => {
       const key = normalizeProductCategory(p.category);
@@ -259,8 +311,8 @@ export default function MenuClient({
         slugToImage[key] = p.imageUrl;
       }
     });
-    return { idToSlug, slugToImage };
-  }, [categories, products]);
+    return { idToSlug, slugToImage, subIdToSlug, subSlugToName, categorySlugToSubCategories };
+  }, [categories, products, subCategories]);
 
   const resolveProductCategory = useCallback(
     (product: Product) => {
@@ -272,17 +324,58 @@ export default function MenuClient({
     [categoryMaps]
   );
 
+  const resolveProductSubCategory = useCallback(
+    (product: Product) => {
+      if (product.subCategoryId && categoryMaps.subIdToSlug[product.subCategoryId]) {
+        return categoryMaps.subIdToSlug[product.subCategoryId];
+      }
+      return undefined;
+    },
+    [categoryMaps]
+  );
+
   const filtered = useMemo(() => {
     const q = debouncedSearch;
     const result = products.filter((p) => {
-      const slug = resolveProductCategory(p);
-      if (selectedCat !== "ALL" && slug !== selectedCat) {
+      const categorySlug = resolveProductCategory(p);
+      const subCategorySlug = resolveProductSubCategory(p);
+      if (selectedCat && categorySlug !== selectedCat) {
+        return false;
+      }
+      if (selectedCat && selectedSubCat !== "ALL" && subCategorySlug !== selectedSubCat) {
         return false;
       }
       return p.name.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q);
     });
     return sortByPriceDesc(result);
-  }, [products, debouncedSearch, selectedCat, resolveProductCategory]);
+  }, [products, debouncedSearch, selectedCat, selectedSubCat, resolveProductCategory, resolveProductSubCategory]);
+
+  const groupedFiltered = useMemo(() => {
+    if (!selectedCat || selectedSubCat !== "ALL") return [];
+    const grouped = new Map<string, Product[]>();
+    filtered.forEach((product) => {
+      const subSlug = resolveProductSubCategory(product) ?? "uncategorized";
+      if (!grouped.has(subSlug)) grouped.set(subSlug, []);
+      grouped.get(subSlug)?.push(product);
+    });
+
+    const entries = Array.from(grouped.entries()).map(([slug, items]) => ({
+      slug,
+      name: slug === "uncategorized" ? "Diğer" : categoryMaps.subSlugToName[slug] ?? slug,
+      items,
+    }));
+
+    const orderMap = new Map(
+      (categoryMaps.categorySlugToSubCategories[selectedCat] || []).map((s, idx) => [s.slug, idx])
+    );
+
+    return entries.sort((a, b) => {
+      const aOrder = orderMap.has(a.slug) ? (orderMap.get(a.slug) as number) : Number.MAX_SAFE_INTEGER;
+      const bOrder = orderMap.has(b.slug) ? (orderMap.get(b.slug) as number) : Number.MAX_SAFE_INTEGER;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    });
+  }, [categoryMaps.categorySlugToSubCategories, categoryMaps.subSlugToName, filtered, resolveProductSubCategory, selectedCat, selectedSubCat]);
 
   const cartSummary = useMemo(() => {
     const entries = Object.values(cartItems);
@@ -474,39 +567,6 @@ export default function MenuClient({
         role="tablist"
         aria-label="Menu categories"
       >
-        <button
-          key="all"
-          role="tab"
-          aria-selected={selectedCat === "ALL"}
-          className="flex flex-col items-center flex-shrink-0 w-24"
-          data-category="ALL"
-          onClick={() => setSelectedCat("ALL")}
-        >
-          <div
-            className="w-20 h-16 rounded-xl overflow-hidden mb-2"
-            style={{
-              border: `4px solid ${selectedCat === "ALL" ? COLORS.maroon : "transparent"}`,
-            }}
-          >
-            {ALL_CATEGORY_IMAGE ? (
-              <Image
-                src={ALL_CATEGORY_IMAGE}
-                alt="Tümü"
-                width={96}
-                height={80}
-                className="object-cover w-full h-full"
-              />
-            ) : (
-              <div className="w-full h-full" style={{ background: COLORS.chip }} />
-            )}
-          </div>
-          <span
-            className="text-sm font-medium text-center leading-tight"
-            style={{ color: selectedCat === "ALL" ? COLORS.maroon : COLORS.text }}
-          >
-            Tümü
-          </span>
-        </button>
         {categories.map((cat) => {
           const active = selectedCat === cat.slug;
           return (
@@ -516,7 +576,10 @@ export default function MenuClient({
               aria-selected={active}
               className="flex flex-col items-center flex-shrink-0 w-24"
               data-category={cat.slug}
-              onClick={() => setSelectedCat(cat.slug)}
+              onClick={() => {
+                setSelectedCat(cat.slug);
+                setSelectedSubCat("ALL");
+              }}
             >
               <div
                 className="w-20 h-16 rounded-xl overflow-hidden mb-2"
@@ -531,6 +594,7 @@ export default function MenuClient({
                     width={96}
                     height={80}
                     className="object-cover w-full h-full"
+                    unoptimized
                   />
                 ) : (
                   <div className="w-full h-full" style={{ background: COLORS.chip }} />
@@ -550,7 +614,7 @@ export default function MenuClient({
       </nav>
 
       {/* Category hero */}
-      {selectedCat !== "ALL" && (
+      {selectedCat && (
         <div className="px-4 flex flex-col items-center">
           <div
             className="relative w-full rounded-xl overflow-hidden"
@@ -562,6 +626,7 @@ export default function MenuClient({
                 alt={categories.find((c) => c.slug === selectedCat)?.name || selectedCat}
                 fill
                 className="object-cover"
+                unoptimized
               />
             ) : (
               <div className="w-full h-full" style={{ background: COLORS.chip }} />
@@ -574,6 +639,44 @@ export default function MenuClient({
             {categories.find((c) => c.slug === selectedCat)?.name || selectedCat}
           </div>
         </div>
+      )}
+
+      {selectedCat && (categoryMaps.categorySlugToSubCategories[selectedCat]?.length ?? 0) > 0 && (
+        <nav
+          className="cat-scroll flex gap-2 overflow-x-auto px-4 py-1"
+          role="tablist"
+          aria-label="Alt kategoriler"
+        >
+          <button
+            role="tab"
+            aria-selected={selectedSubCat === "ALL"}
+            className="px-3 py-1 rounded-full text-sm border"
+            onClick={() => setSelectedSubCat("ALL")}
+            style={{
+              borderColor: selectedSubCat === "ALL" ? COLORS.maroon : COLORS.baseBorder,
+              color: selectedSubCat === "ALL" ? COLORS.maroon : COLORS.text,
+              background: selectedSubCat === "ALL" ? "#fff5f5" : "#fff",
+            }}
+          >
+            Tümü
+          </button>
+          {categoryMaps.categorySlugToSubCategories[selectedCat].map((sub) => (
+            <button
+              key={sub.id}
+              role="tab"
+              aria-selected={selectedSubCat === sub.slug}
+              className="px-3 py-1 rounded-full text-sm border whitespace-nowrap"
+              onClick={() => setSelectedSubCat(sub.slug)}
+              style={{
+                borderColor: selectedSubCat === sub.slug ? COLORS.maroon : COLORS.baseBorder,
+                color: selectedSubCat === sub.slug ? COLORS.maroon : COLORS.text,
+                background: selectedSubCat === sub.slug ? "#fff5f5" : "#fff",
+              }}
+            >
+              {sub.name}
+            </button>
+          ))}
+        </nav>
       )}
 
       <style jsx>{`
@@ -591,49 +694,94 @@ export default function MenuClient({
           className="p-4 flex flex-col gap-3"
           aria-label="Ürün listesi"
         >
-          {filtered.map((p) => (
-            <article
-              key={p.id}
-              className="rounded-xl p-3 flex items-center gap-3"
-              style={{
-                backgroundColor: "#ded9d9",
-              }}
-            >
-              <button
-                onClick={() => setSheetProduct(p)}
-                className="flex items-center w-full text-left"
-              >
-                {/* Image: small rounded thumbnail */}
-                <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                  {p.imageUrl ? (
-                    <Image
-                      src={p.imageUrl}
-                      alt={p.name}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-[#cfcaca]" />
-                  )}
+          {selectedSubCat === "ALL" && groupedFiltered.length > 0
+            ? groupedFiltered.map((group) => (
+                <div key={group.slug} className="space-y-2">
+                  <h3 className="text-sm font-semibold px-1" style={{ color: COLORS.maroon }}>
+                    {group.name}
+                  </h3>
+                  {group.items.map((p) => (
+                    <article
+                      key={p.id}
+                      className="rounded-xl p-3 flex items-center gap-3"
+                      style={{ backgroundColor: "#ded9d9" }}
+                    >
+                      <button
+                        onClick={() => setSheetProduct(p)}
+                        className="flex items-center w-full text-left"
+                      >
+                        <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                          {p.imageUrl ? (
+                            <Image
+                              src={p.imageUrl}
+                              alt={p.name}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-[#cfcaca]" />
+                          )}
+                        </div>
+                        <div className="flex flex-col flex-1 ml-3">
+                          <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
+                            {p.name}
+                          </h2>
+                          {p.description && (
+                            <p className="text-sm line-clamp-2" style={{ color: COLORS.muted }}>
+                              {p.description}
+                            </p>
+                          )}
+                          <span className="mt-1 font-semibold text-sm" style={{ color: COLORS.text }}>
+                            {fmtTRY(p.priceCents)}
+                          </span>
+                        </div>
+                      </button>
+                    </article>
+                  ))}
                 </div>
-
-                {/* Text content */}
-                <div className="flex flex-col flex-1 ml-3">
-                  <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
-                    {p.name}
-                  </h2>
-                  {p.description && (
-                    <p className="text-sm line-clamp-2" style={{ color: COLORS.muted }}>
-                      {p.description}
-                    </p>
-                  )}
-                  <span className="mt-1 font-semibold text-sm" style={{ color: COLORS.text }}>
-                    {fmtTRY(p.priceCents)}
-                  </span>
-                </div>
-              </button>
-            </article>
-          ))}
+              ))
+            : filtered.map((p) => (
+                <article
+                  key={p.id}
+                  className="rounded-xl p-3 flex items-center gap-3"
+                  style={{
+                    backgroundColor: "#ded9d9",
+                  }}
+                >
+                  <button
+                    onClick={() => setSheetProduct(p)}
+                    className="flex items-center w-full text-left"
+                  >
+                    <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                      {p.imageUrl ? (
+                        <Image
+                          src={p.imageUrl}
+                          alt={p.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-[#cfcaca]" />
+                      )}
+                    </div>
+                    <div className="flex flex-col flex-1 ml-3">
+                      <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
+                        {p.name}
+                      </h2>
+                      {p.description && (
+                        <p className="text-sm line-clamp-2" style={{ color: COLORS.muted }}>
+                          {p.description}
+                        </p>
+                      )}
+                      <span className="mt-1 font-semibold text-sm" style={{ color: COLORS.text }}>
+                        {fmtTRY(p.priceCents)}
+                      </span>
+                    </div>
+                  </button>
+                </article>
+              ))}
         </section>
 
 
@@ -670,6 +818,7 @@ export default function MenuClient({
                     fill
                     className="object-cover"
                     sizes="(min-width: 640px) 384px, 100vw"
+                    unoptimized
                   />
                 ) : (
                   <div className="absolute inset-0" style={{ background: COLORS.chip }} />
@@ -834,6 +983,7 @@ export default function MenuClient({
                               fill
                               className="object-cover"
                               sizes="56px"
+                              unoptimized
                             />
                           ) : (
                             <div className="h-full w-full" style={{ background: COLORS.chip }} />

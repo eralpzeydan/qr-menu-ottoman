@@ -7,7 +7,7 @@ export const metadata = { title: 'Admin • Yeni Ürün' };
 
 export default async function NewProductPage() {
   await requireAdminOnServer();
-  const [venues, categories] = await Promise.all([
+  const [venues, categories, subCategories] = await Promise.all([
     prisma.venue.findMany({
       orderBy: { name: 'asc' },
       select: { id: true, name: true, slug: true },
@@ -16,12 +16,16 @@ export default async function NewProductPage() {
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
       select: { id: true, name: true, slug: true, venueId: true },
     }),
+    prisma.subCategory.findMany({
+      orderBy: [{ categoryId: 'asc' }, { displayOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, slug: true, venueId: true, categoryId: true },
+    }),
   ]);
   return (
     <AuthGate>
       <main className="max-w-screen-sm mx-auto p-6 space-y-4">
         <h1 className="text-2xl font-semibold">Yeni Ürün</h1>
-        <NewProductForm venues={venues} categories={categories} />
+        <NewProductForm venues={venues} categories={categories} subCategories={subCategories} />
       </main>
     </AuthGate>
   );

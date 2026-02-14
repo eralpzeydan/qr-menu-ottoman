@@ -36,6 +36,9 @@ vi.mock('@/lib/storage/supabase', () => ({
   isSupabaseStorageEnabled: () => false,
   supabaseAdapter: { save: vi.fn() },
 }));
+vi.mock('@/lib/storage/provider', () => ({
+  getStorageAdapter: () => ({ save: storageSave, remove: vi.fn() }),
+}));
 
 const { verifyCsrfFromRequest, verifyCsrf } = csrfMocks;
 const { readSession } = sessionMocks;

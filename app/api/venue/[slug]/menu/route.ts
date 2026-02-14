@@ -5,6 +5,22 @@ import { rateLimit } from '@/lib/rate-limit';
 import { capitalizeWords } from '@/lib/format';
 import { trackMenuAccessError, trackMenuAccessSuccess } from '@/lib/monitoring/sentry';
 
+function safeTrackMenuAccessError(error: unknown, venueId: string, tableId?: string, userAgent?: string) {
+  try {
+    trackMenuAccessError(error, venueId, tableId, userAgent);
+  } catch (trackingError) {
+    console.warn('SENTRY_TRACK_MENU_ERROR_FAILED', trackingError);
+  }
+}
+
+function safeTrackMenuAccessSuccess(venueId: string, tableId?: string, loadTime?: number) {
+  try {
+    trackMenuAccessSuccess(venueId, tableId, loadTime);
+  } catch (trackingError) {
+    console.warn('SENTRY_TRACK_MENU_SUCCESS_FAILED', trackingError);
+  }
+}
+
 export async function GET(req: NextRequest, { params }: { params: { slug: string }}) {
   const startTime = Date.now();
   const userAgent = req.headers.get('user-agent') ?? undefined;
@@ -22,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
 
     if (!venue) {
       // Track 404 errors for monitoring venue slug issues
-      trackMenuAccessError(
+      safeTrackMenuAccessError(
         new Error(`Venue not found: ${params.slug}`),
         'unknown',
         tableId,
@@ -36,11 +52,17 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
       select: { id: true, name: true, slug: true, imageUrl: true, displayOrder: true },
     });
+    const subCategories = await prisma.subCategory.findMany({
+      where: { venueId: venue.id, isVisible: true },
+      orderBy: [{ categoryId: 'asc' }, { displayOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, categoryId: true, venueId: true, name: true, slug: true, displayOrder: true },
+    });
 
     const products = await prisma.product.findMany({
       where: { venueId: venue.id, isActive: true, deletedAt: null },
       orderBy: [
         { categoryId: 'asc' },
+        { subCategoryId: 'asc' },
         { priceCents: 'desc' },
         { name: 'asc' },
       ],
@@ -50,6 +72,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
         slug: true,
         category: true,
         categoryId: true,
+        subCategoryId: true,
         description: true,
         priceCents: true,
         imageUrl: true,
@@ -76,20 +99,21 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
 
     // Track successful menu load
     const loadTime = Date.now() - startTime;
-    trackMenuAccessSuccess(venue.id, tableId, loadTime);
+    safeTrackMenuAccessSuccess(venue.id, tableId, loadTime);
 
-    const res = NextResponse.json({ venue, products: normalizedProducts, categories });
+    const res = NextResponse.json({ venue, products: normalizedProducts, categories, subCategories });
     res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
     return res;
   } catch (error) {
     console.error('Menu API error:', error);
 
     // Track menu access errors with context
-    trackMenuAccessError(error, 'unknown', tableId, userAgent);
+    safeTrackMenuAccessError(error, 'unknown', tableId, userAgent);
 
-    return NextResponse.json(
-      { error: 'Menü yüklenirken bir hata oluştu. Lütfen tekrar deneyin.' },
-      { status: 500 }
-    );
+    const message =
+      process.env.NODE_ENV === 'development' && error instanceof Error
+        ? `${error.message}`
+        : 'Menü yüklenirken bir hata oluştu. Lütfen tekrar deneyin.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,22 +1,28 @@
 import { withSentryConfig } from '@sentry/nextjs';
 
 const supabaseUrl = process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL) : null;
+const r2PublicUrl = process.env.R2_PUBLIC_BASE_URL ? new URL(process.env.R2_PUBLIC_BASE_URL) : null;
+const remotePatterns = [
+  ...(supabaseUrl
+    ? [{
+        protocol: 'https',
+        hostname: supabaseUrl.hostname,
+        pathname: '/storage/v1/object/public/**',
+      }]
+    : []),
+  ...(r2PublicUrl
+    ? [{
+        protocol: r2PublicUrl.protocol.replace(':', ''),
+        hostname: r2PublicUrl.hostname,
+        pathname: '/**',
+      }]
+    : []),
+];
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: { serverActions: { bodySizeLimit: '2mb' } },
-  images: supabaseUrl
-    ? {
-        remotePatterns: [
-          {
-            protocol: 'https',
-            hostname: supabaseUrl.hostname,
-            pathname: '/storage/v1/object/public/**',
-          },
-        ],
-        unoptimized: true,
-      }
-    : { unoptimized: true },
+  images: remotePatterns.length ? { remotePatterns, unoptimized: true } : { unoptimized: true },
   async rewrites() {
     return [{ source: '/menu', destination: '/ornek-kafe' }];
   },
