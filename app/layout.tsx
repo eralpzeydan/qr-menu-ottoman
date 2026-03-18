@@ -4,9 +4,9 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
 export const metadata = {
-  title: 'Cleopatra Coffee',
-  description: 'Cleopatra Coffee için hızlı, çevrimdışı okunabilir QR menü deneyimi',
-  openGraph: { title: 'Cleopatra Coffee', description: 'Cleopatra Coffee menüsü', type: 'website' },
+  title: '1453 Ottoman Cafe QR Menu',
+  description: '1453 Ottoman Cafe için hızlı, çevrimdışı okunabilir QR menü deneyimi',
+  openGraph: { title: '1453 Ottoman Cafe QR Menu', description: '1453 Ottoman Cafe menüsü', type: 'website' },
   icons: {
     icon: '/favicon.svg',
   },
