@@ -365,6 +365,9 @@ export default function MenuClient({
 
   const groupedFiltered = useMemo(() => {
     if (!selectedCat || selectedSubCat !== "ALL") return [];
+    const subCategoriesForSelected = categoryMaps.categorySlugToSubCategories[selectedCat] || [];
+    if (subCategoriesForSelected.length === 0) return [];
+
     const grouped = new Map<string, Product[]>();
     filtered.forEach((product) => {
       const subSlug = resolveProductSubCategory(product) ?? "uncategorized";
@@ -379,7 +382,7 @@ export default function MenuClient({
     }));
 
     const orderMap = new Map(
-      (categoryMaps.categorySlugToSubCategories[selectedCat] || []).map((s, idx) => [s.slug, idx])
+      subCategoriesForSelected.map((s, idx) => [s.slug, idx])
     );
 
     return entries.sort((a, b) => {
