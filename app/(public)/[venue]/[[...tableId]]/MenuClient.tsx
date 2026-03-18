@@ -289,6 +289,7 @@ export default function MenuClient({
 
   const categoryMaps = useMemo(() => {
     const idToSlug: Record<string, string> = {};
+    const slugToName: Record<string, string> = {};
     const slugToImage: Record<string, string | undefined> = {};
     const subIdToSlug: Record<string, string> = {};
     const subSlugToName: Record<string, string> = {};
@@ -296,6 +297,7 @@ export default function MenuClient({
 
     categories.forEach((c) => {
       if (c.id) idToSlug[c.id] = c.slug;
+      if (c.slug) slugToName[c.slug] = c.name;
       if (c.slug && !slugToImage[c.slug]) {
         slugToImage[c.slug] = c.imageUrl || `/images/categories/${c.slug}.jpg`;
       }
@@ -324,7 +326,7 @@ export default function MenuClient({
         slugToImage[key] = p.imageUrl;
       }
     });
-    return { idToSlug, slugToImage, subIdToSlug, subSlugToName, categorySlugToSubCategories };
+    return { idToSlug, slugToName, slugToImage, subIdToSlug, subSlugToName, categorySlugToSubCategories };
   }, [categories, products, subCategories]);
 
   const resolveProductCategory = useCallback(
@@ -347,23 +349,43 @@ export default function MenuClient({
     [categoryMaps]
   );
 
+  const resolveProductCategoryLabel = useCallback(
+    (product: Product) => {
+      const categorySlug = resolveProductCategory(product);
+      const subCategorySlug = resolveProductSubCategory(product);
+      const categoryName = categorySlug ? categoryMaps.slugToName[categorySlug] ?? categorySlug : null;
+      const subCategoryName = subCategorySlug ? categoryMaps.subSlugToName[subCategorySlug] ?? subCategorySlug : null;
+
+      if (categoryName && subCategoryName) return `${categoryName} / ${subCategoryName}`;
+      if (categoryName) return categoryName;
+      return null;
+    },
+    [categoryMaps, resolveProductCategory, resolveProductSubCategory]
+  );
+
+  const isSearching = debouncedSearch.trim().length > 0;
+
   const filtered = useMemo(() => {
     const q = debouncedSearch;
     const result = products.filter((p) => {
       const categorySlug = resolveProductCategory(p);
       const subCategorySlug = resolveProductSubCategory(p);
-      if (selectedCat && categorySlug !== selectedCat) {
+      const categoryName = categorySlug ? categoryMaps.slugToName[categorySlug] ?? categorySlug : '';
+      const subCategoryName = subCategorySlug ? categoryMaps.subSlugToName[subCategorySlug] ?? subCategorySlug : '';
+
+      if (!isSearching && selectedCat && categorySlug !== selectedCat) {
         return false;
       }
-      if (selectedCat && selectedSubCat !== "ALL" && subCategorySlug !== selectedSubCat) {
+      if (!isSearching && selectedCat && selectedSubCat !== "ALL" && subCategorySlug !== selectedSubCat) {
         return false;
       }
-      return p.name.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q);
+      return [p.name, categoryName, subCategoryName].some((value) => value.toLowerCase().includes(q));
     });
     return sortByPriceDesc(result);
-  }, [products, debouncedSearch, selectedCat, selectedSubCat, resolveProductCategory, resolveProductSubCategory]);
+  }, [products, debouncedSearch, selectedCat, selectedSubCat, resolveProductCategory, resolveProductSubCategory, categoryMaps, isSearching]);
 
   const groupedFiltered = useMemo(() => {
+    if (isSearching) return [];
     if (!selectedCat || selectedSubCat !== "ALL") return [];
     const subCategoriesForSelected = categoryMaps.categorySlugToSubCategories[selectedCat] || [];
     if (subCategoriesForSelected.length === 0) return [];
@@ -391,7 +413,7 @@ export default function MenuClient({
       if (aOrder !== bOrder) return aOrder - bOrder;
       return a.name.localeCompare(b.name);
     });
-  }, [categoryMaps.categorySlugToSubCategories, categoryMaps.subSlugToName, filtered, resolveProductSubCategory, selectedCat, selectedSubCat]);
+  }, [categoryMaps.categorySlugToSubCategories, categoryMaps.subSlugToName, filtered, resolveProductSubCategory, selectedCat, selectedSubCat, isSearching]);
 
   const cartSummary = useMemo(() => {
     const entries = Object.values(cartItems);
@@ -630,7 +652,7 @@ export default function MenuClient({
       </nav>
 
       {/* Category hero */}
-      {selectedCat && (
+      {selectedCat && !isSearching && (
         <div className="px-4 flex flex-col items-center">
           <div
             className="relative w-full rounded-xl overflow-hidden"
@@ -657,7 +679,7 @@ export default function MenuClient({
         </div>
       )}
 
-      {selectedCat && (categoryMaps.categorySlugToSubCategories[selectedCat]?.length ?? 0) > 0 && (
+      {selectedCat && !isSearching && (categoryMaps.categorySlugToSubCategories[selectedCat]?.length ?? 0) > 0 && (
         <nav
           className="cat-scroll flex gap-2 overflow-x-auto px-4 py-1"
           role="tablist"
@@ -741,6 +763,11 @@ export default function MenuClient({
                           <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
                             {p.name}
                           </h2>
+                          {isSearching && resolveProductCategoryLabel(p) && (
+                            <p className="text-xs font-medium mb-1" style={{ color: COLORS.muted }}>
+                              {resolveProductCategoryLabel(p)}
+                            </p>
+                          )}
                           {p.description && (
                             <p className="text-sm line-clamp-2" style={{ color: COLORS.muted }}>
                               {p.description}
@@ -782,6 +809,11 @@ export default function MenuClient({
                       <h2 className="font-semibold text-base mb-1" style={{ color: COLORS.text }}>
                         {p.name}
                       </h2>
+                      {isSearching && resolveProductCategoryLabel(p) && (
+                        <p className="text-xs font-medium mb-1" style={{ color: COLORS.muted }}>
+                          {resolveProductCategoryLabel(p)}
+                        </p>
+                      )}
                       {p.description && (
                         <p className="text-sm line-clamp-2" style={{ color: COLORS.muted }}>
                           {p.description}
