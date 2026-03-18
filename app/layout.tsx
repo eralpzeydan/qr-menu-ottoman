@@ -8,7 +8,7 @@ export const metadata = {
   description: 'Cleopatra Coffee için hızlı, çevrimdışı okunabilir QR menü deneyimi',
   openGraph: { title: 'Cleopatra Coffee', description: 'Cleopatra Coffee menüsü', type: 'website' },
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.svg',
   },
 };
 

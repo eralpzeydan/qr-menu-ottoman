@@ -27,7 +27,10 @@ const nextConfig = {
     return [{ source: '/menu', destination: '/ornek-kafe' }];
   },
   async redirects() {
-    return [{ source: '/', destination: '/menu', permanent: false }];
+    return [
+      { source: '/', destination: '/menu', permanent: false },
+      { source: '/ornek-kafe', destination: '/menu', permanent: false },
+    ];
   },
 };
 
